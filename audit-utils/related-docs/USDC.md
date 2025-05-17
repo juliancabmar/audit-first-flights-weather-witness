@@ -1,0 +1,2 @@
+- Is not descentralized. The Owner (Circle) have all control of the mint and burn.
+- The contract owner can blacklist addresses

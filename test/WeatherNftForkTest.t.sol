@@ -5,18 +5,28 @@ import {Test, console} from "forge-std/Test.sol";
 import {WeatherNft, WeatherNftStore} from "src/WeatherNft.sol";
 import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
 import {Vm} from "forge-std/Vm.sol";
+// My imports
+import {Deploy} from "src/Deploy.sol";
 
 contract WeatherNftForkTest is Test {
     WeatherNft weatherNft;
     LinkTokenInterface linkToken;
     address functionsRouter;
     address user = makeAddr("user");
+    // My states
+    Deploy deploy;
 
     function setUp() external {
+        // My own addresses
+        deploy = new Deploy();
+        address linkTokenAddr = deploy.linkTokenAddr();
+        address upKeeperAddr = deploy.upKeeperAddr();
+        address weatherNftAddr = deploy.weatherNftAddr();
+        address routerAddr = deploy.routerAddr();
         // You can replace the weather nft contract with your own deployed contract
-        weatherNft = WeatherNft(0x4fF356bB2125886d048038386845eCbde022E15e);
-        linkToken = LinkTokenInterface(0x0b9d5D9136855f6FEc3c0993feE6E9CE8a297846);
-        functionsRouter = 0xA9d587a00A31A52Ed70D6026794a8FC5E2F5dCb0;
+        weatherNft = WeatherNft(weatherNftAddr);
+        linkToken = LinkTokenInterface(linkTokenAddr);
+        functionsRouter = routerAddr;
         vm.deal(user, 1000e18);
         deal(address(linkToken), user, 1000e18);
 
@@ -37,11 +47,7 @@ contract WeatherNftForkTest is Test {
         linkToken.approve(address(weatherNft), initLinkDeposit);
         vm.recordLogs();
         weatherNft.requestMintWeatherNFT{value: weatherNft.s_currentMintPrice()}(
-            pincode,
-            isoCode,
-            registerKeeper,
-            heartbeat,
-            initLinkDeposit
+            pincode, isoCode, registerKeeper, heartbeat, initLinkDeposit
         );
         vm.stopPrank();
 
@@ -49,7 +55,7 @@ contract WeatherNftForkTest is Test {
         bytes32 reqId;
         for (uint256 i; i < logs.length; i++) {
             if (logs[i].topics[0] == keccak256("WeatherNFTMintRequestSent(address,string,string,bytes32)")) {
-                (, , , reqId) = abi.decode(logs[i].data, (address, string, string, bytes32));
+                (,,, reqId) = abi.decode(logs[i].data, (address, string, string, bytes32));
                 break;
             }
         }
@@ -96,7 +102,7 @@ contract WeatherNftForkTest is Test {
 
         // automation check
         bytes memory encodedTokenId = abi.encode(tokenId);
-        (bool weatherUpdateNeeded, ) = weatherNft.checkUpkeep(encodedTokenId);
+        (bool weatherUpdateNeeded,) = weatherNft.checkUpkeep(encodedTokenId);
         assert(weatherUpdateNeeded == false);
 
         // time travelling to reach heartbeat for weather update

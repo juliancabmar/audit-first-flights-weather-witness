@@ -10,7 +10,8 @@ import {FunctionsClient} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/Fu
 import {ConfirmedOwner} from "@chainlink/contracts/src/v0.8/shared/access/ConfirmedOwner.sol";
 import {FunctionsRequest} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/libraries/FunctionsRequest.sol";
 import {AutomationCompatibleInterface} from "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
-import {IAutomationRegistryMaster} from "@chainlink/contracts/src/v0.8/automation/interfaces/v2_2/IAutomationRegistryMaster.sol";
+import {IAutomationRegistryMaster} from
+    "@chainlink/contracts/src/v0.8/automation/interfaces/v2_2/IAutomationRegistryMaster.sol";
 import {IAutomationRegistrarInterface} from "./interfaces/IAutomationRegistrarInterface.sol";
 import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
@@ -32,15 +33,8 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         address _keeperRegistry,
         address _keeperRegistrar,
         uint32 _upkeepGaslimit
-    )
-        ERC721("Weather NFT", "W-NFT")
-        FunctionsClient(functionsRouter)
-        ConfirmedOwner(msg.sender)
-    {
-        require(
-            weathers.length == weatherURIs.length,
-            WeatherNft__IncorrectLength()
-        );
+    ) ERC721("Weather NFT", "W-NFT") FunctionsClient(functionsRouter) ConfirmedOwner(msg.sender) {
+        require(weathers.length == weatherURIs.length, WeatherNft__IncorrectLength());
 
         for (uint256 i; i < weathers.length; ++i) {
             s_weatherToTokenURI[weathers[i]] = weatherURIs[i];
@@ -69,9 +63,7 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         s_functionsConfig.source = newSource;
     }
 
-    function updateEncryptedSecretsURL(
-        bytes memory newEncryptedSecretsURL
-    ) external onlyOwner {
+    function updateEncryptedSecretsURL(bytes memory newEncryptedSecretsURL) external onlyOwner {
         s_functionsConfig.encryptedSecretsURL = newEncryptedSecretsURL;
     }
 
@@ -79,7 +71,10 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         s_upkeepGaslimit = newGaslimit;
     }
 
-    function _sendFunctionsWeatherFetchRequest(string memory _pincode, string memory _isoCode) internal returns (bytes32 _reqId) {
+    function _sendFunctionsWeatherFetchRequest(string memory _pincode, string memory _isoCode)
+        internal
+        returns (bytes32 _reqId)
+    {
         FunctionsRequest.Request memory req;
         req.initializeRequestForInlineJavaScript(s_functionsConfig.source);
         string[] memory _args = new string[](2);
@@ -88,12 +83,8 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
 
         req.setArgs(_args);
 
-        _reqId = _sendRequest(
-            req.encodeCBOR(),
-            s_functionsConfig.subId,
-            s_functionsConfig.gasLimit,
-            s_functionsConfig.donId
-        );
+        _reqId =
+            _sendRequest(req.encodeCBOR(), s_functionsConfig.subId, s_functionsConfig.gasLimit, s_functionsConfig.donId);
     }
 
     function requestMintWeatherNFT(
@@ -103,18 +94,11 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         uint256 _heartbeat,
         uint256 _initLinkDeposit
     ) external payable returns (bytes32 _reqId) {
-        require(
-            msg.value == s_currentMintPrice,
-            WeatherNft__InvalidAmountSent()
-        );
+        require(msg.value == s_currentMintPrice, WeatherNft__InvalidAmountSent());
         s_currentMintPrice += s_stepIncreasePerMint;
 
         if (_registerKeeper) {
-            IERC20(s_link).safeTransferFrom(
-                msg.sender,
-                address(this),
-                _initLinkDeposit
-            );
+            IERC20(s_link).safeTransferFrom(msg.sender, address(this), _initLinkDeposit);
         }
 
         _reqId = _sendFunctionsWeatherFetchRequest(_pincode, _isoCode);
@@ -141,18 +125,12 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
             return;
         }
 
-        UserMintRequest memory _userMintRequest = s_funcReqIdToUserMintReq[
-            requestId
-        ];
+        UserMintRequest memory _userMintRequest = s_funcReqIdToUserMintReq[requestId];
         uint8 weather = abi.decode(response, (uint8));
         uint256 tokenId = s_tokenCounter;
         s_tokenCounter++;
 
-        emit WeatherNFTMinted(
-            requestId,
-            msg.sender,
-            Weather(weather)
-        );
+        emit WeatherNFTMinted(requestId, msg.sender, Weather(weather));
         _mint(msg.sender, tokenId);
         s_tokenIdToWeather[tokenId] = Weather(weather);
 
@@ -161,26 +139,21 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
             // Register chainlink keeper to pull weather data in order to automate weather nft
             LinkTokenInterface(s_link).approve(s_keeperRegistrar, _userMintRequest.initLinkDeposit);
 
-            IAutomationRegistrarInterface.RegistrationParams
-                memory _keeperParams = IAutomationRegistrarInterface
-                    .RegistrationParams({
-                        name: string.concat(
-                            "Weather NFT Keeper: ",
-                            Strings.toString(tokenId)
-                        ),
-                        encryptedEmail: "",
-                        upkeepContract: address(this),
-                        gasLimit: s_upkeepGaslimit,
-                        adminAddress: address(this),
-                        triggerType: 0,
-                        checkData: abi.encode(tokenId),
-                        triggerConfig: "",
-                        offchainConfig: "",
-                        amount: uint96(_userMintRequest.initLinkDeposit)
-                    });
+            IAutomationRegistrarInterface.RegistrationParams memory _keeperParams = IAutomationRegistrarInterface
+                .RegistrationParams({
+                name: string.concat("Weather NFT Keeper: ", Strings.toString(tokenId)),
+                encryptedEmail: "",
+                upkeepContract: address(this),
+                gasLimit: s_upkeepGaslimit,
+                adminAddress: address(this),
+                triggerType: 0,
+                checkData: abi.encode(tokenId),
+                triggerConfig: "",
+                offchainConfig: "",
+                amount: uint96(_userMintRequest.initLinkDeposit)
+            });
 
-            upkeepId = IAutomationRegistrarInterface(s_keeperRegistrar)
-                .registerUpkeep(_keeperParams);
+            upkeepId = IAutomationRegistrarInterface(s_keeperRegistrar).registerUpkeep(_keeperParams);
         }
 
         s_weatherNftInfo[tokenId] = WeatherNftInfo({
@@ -205,25 +178,15 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         emit NftWeatherUpdated(tokenId, Weather(weather));
     }
 
-    function fulfillRequest(
-        bytes32 requestId,
-        bytes memory response,
-        bytes memory err
-    ) internal override {
+    function fulfillRequest(bytes32 requestId, bytes memory response, bytes memory err) internal override {
         if (s_funcReqIdToUserMintReq[requestId].user != address(0)) {
-            s_funcReqIdToMintFunctionReqResponse[requestId] = MintFunctionReqResponse({
-                response: response,
-                err: err
-            });
-        }
-        else if (s_funcReqIdToTokenIdUpdate[requestId] > 0) {
+            s_funcReqIdToMintFunctionReqResponse[requestId] = MintFunctionReqResponse({response: response, err: err});
+        } else if (s_funcReqIdToTokenIdUpdate[requestId] > 0) {
             _fulfillWeatherUpdate(requestId, response, err);
         }
     }
 
-    function checkUpkeep(
-        bytes calldata checkData
-    )
+    function checkUpkeep(bytes calldata checkData)
         external
         view
         override
@@ -232,9 +195,9 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         uint256 _tokenId = abi.decode(checkData, (uint256));
         if (_ownerOf(_tokenId) == address(0)) {
             upkeepNeeded = false;
-        }
-        else {
-            upkeepNeeded = (block.timestamp >= s_weatherNftInfo[_tokenId].lastFulfilledAt + s_weatherNftInfo[_tokenId].heartbeat);
+        } else {
+            upkeepNeeded =
+                (block.timestamp >= s_weatherNftInfo[_tokenId].lastFulfilledAt + s_weatherNftInfo[_tokenId].heartbeat);
             if (upkeepNeeded) {
                 performData = checkData;
             }
@@ -261,17 +224,12 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         return "data:application/json;base64,";
     }
 
-    function tokenURI(
-        uint256 tokenId
-    ) public view override returns (string memory) {
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
         _requireOwned(tokenId);
         string memory image = s_weatherToTokenURI[s_tokenIdToWeather[tokenId]];
 
         bytes memory jsonData = abi.encodePacked(
-            '{"name": "Weathear NFT", "user": "',
-            Strings.toHexString(_ownerOf(tokenId)),
-            '", "image": "',
-            image, '"}'
+            '{"name": "Weathear NFT", "user": "', Strings.toHexString(_ownerOf(tokenId)), '", "image": "', image, '"}'
         );
 
         string memory base64TransformedData = Base64.encode(jsonData);

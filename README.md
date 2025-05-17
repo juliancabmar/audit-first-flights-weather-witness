@@ -120,7 +120,9 @@ cd weather-witness
 ### Install Dependencies
 
 ```bash
-forge build
+forge install Openzeppelin/openzeppelin-contracts --no-commit
+forge install smartcontractkit/chainlink-brownie-contracts --no-commit
+forge build --via-ir
 npm i
 ```
 
