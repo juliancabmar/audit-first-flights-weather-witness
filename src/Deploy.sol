@@ -92,7 +92,7 @@ contract Deploy {
 
         // address functionsRouter,
         WeatherNftStore.FunctionsConfig memory _config = WeatherNftStore.FunctionsConfig({
-            source: "",
+            source: "console.log('HELLO')",
             encryptedSecretsURL: "",
             subId: type(uint64).max,
             gasLimit: 2100000000,

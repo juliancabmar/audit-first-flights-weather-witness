@@ -96,7 +96,7 @@ contract WeatherNftForkTest is Test {
         assertEq(infoPincode, pincode);
         assert(infoUpkeepId > 0);
         assertEq(uint8(weatherNft.s_tokenIdToWeather(tokenId)), uint8(WeatherNftStore.Weather.RAINY));
-
+        // ULTIMOOOOOO
         // getting token uri
         string memory tokenURI = weatherNft.tokenURI(tokenId);
 
@@ -139,4 +139,23 @@ contract WeatherNftForkTest is Test {
         string memory newTokenURI = weatherNft.tokenURI(tokenId);
         assertNotEq(tokenURI, newTokenURI);
     }
+
+    // function testAudit() public {
+    //     string memory pincode = "125001";
+    //     string memory isoCode = "IN";
+    //     bool registerKeeper = true;
+    //     uint256 heartbeat = 12 hours;
+    //     uint256 initLinkDeposit = 5e18;
+    //     uint256 tokenId = weatherNft.s_tokenCounter();
+
+    //     vm.startPrank(user);
+    //     linkToken.approve(address(weatherNft), initLinkDeposit);
+
+    //     bytes32 requestId = weatherNft.requestMintWeatherNFT{value: weatherNft.s_currentMintPrice()}(
+    //         pincode, isoCode, registerKeeper, heartbeat, initLinkDeposit
+    //     );
+    //     vm.stopPrank();
+
+    //     weatherNft.fulfillMintRequest(requestId);
+    // }
 }

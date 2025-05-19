@@ -6,7 +6,7 @@ import {WeatherNftStore} from "./WeatherNftStore.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {FunctionsClient} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/FunctionsClient.sol";
+import {FunctionsClient} from "@chainlink/contracts/src/v0.8/functions/dev/v1_X/FunctionsClient.sol";
 import {ConfirmedOwner} from "@chainlink/contracts/src/v0.8/shared/access/ConfirmedOwner.sol";
 import {FunctionsRequest} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/libraries/FunctionsRequest.sol";
 import {AutomationCompatibleInterface} from "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
@@ -35,7 +35,7 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         uint32 _upkeepGaslimit
     ) ERC721("Weather NFT", "W-NFT") FunctionsClient(functionsRouter) ConfirmedOwner(msg.sender) {
         require(weathers.length == weatherURIs.length, WeatherNft__IncorrectLength());
-
+        // @audit-gas - use local var for length
         for (uint256 i; i < weathers.length; ++i) {
             s_weatherToTokenURI[weathers[i]] = weatherURIs[i];
         }
@@ -62,10 +62,12 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
     function updateSource(string memory newSource) external onlyOwner {
         s_functionsConfig.source = newSource;
     }
+    // @? - is really secret onchain
 
     function updateEncryptedSecretsURL(bytes memory newEncryptedSecretsURL) external onlyOwner {
         s_functionsConfig.encryptedSecretsURL = newEncryptedSecretsURL;
     }
+    // @? this can be changed for DoS
 
     function updateKeeperGaslimit(uint32 newGaslimit) external onlyOwner {
         s_upkeepGaslimit = newGaslimit;
@@ -113,6 +115,14 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
             heartbeat: _heartbeat,
             initLinkDeposit: _initLinkDeposit
         });
+    }
+
+    function fulfillRequest(bytes32 requestId, bytes memory response, bytes memory err) internal override {
+        if (s_funcReqIdToUserMintReq[requestId].user != address(0)) {
+            s_funcReqIdToMintFunctionReqResponse[requestId] = MintFunctionReqResponse({response: response, err: err});
+        } else if (s_funcReqIdToTokenIdUpdate[requestId] > 0) {
+            _fulfillWeatherUpdate(requestId, response, err);
+        }
     }
 
     function fulfillMintRequest(bytes32 requestId) external {
@@ -176,14 +186,6 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         s_tokenIdToWeather[tokenId] = Weather(weather);
 
         emit NftWeatherUpdated(tokenId, Weather(weather));
-    }
-
-    function fulfillRequest(bytes32 requestId, bytes memory response, bytes memory err) internal override {
-        if (s_funcReqIdToUserMintReq[requestId].user != address(0)) {
-            s_funcReqIdToMintFunctionReqResponse[requestId] = MintFunctionReqResponse({response: response, err: err});
-        } else if (s_funcReqIdToTokenIdUpdate[requestId] > 0) {
-            _fulfillWeatherUpdate(requestId, response, err);
-        }
     }
 
     function checkUpkeep(bytes calldata checkData)

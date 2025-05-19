@@ -2,13 +2,17 @@
 pragma solidity ^0.8.19;
 
 import {FunctionsResponse} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/libraries/FunctionsResponse.sol";
+import {FunctionsClient} from "@chainlink/contracts/src/v0.8/functions/dev/v1_X/FunctionsClient.sol";
+import {WeatherNft, WeatherNftStore} from "src/WeatherNft.sol";
+
 import {console2} from "forge-std/Test.sol";
 
 /// @title Chainlink Functions Router EX interface.
 contract MockFunctionsRouter {
     address client;
+    uint256 requestId;
 
-    function setClient(address _client) public {
+    function initializer(address _client) public {
         client = _client;
     }
     /// @notice Sends a request using the provided subscriptionId
@@ -26,14 +30,18 @@ contract MockFunctionsRouter {
         uint16 dataVersion,
         uint32 callbackGasLimit,
         bytes32 donId
-    ) external pure returns (bytes32) {
-        console2.log("MY SubscriptionID: ", subscriptionId);
-        return 0;
+    ) external returns (bytes32) {
+        requestId++;
+        return bytes32(requestId);
     }
 
     function onTokenTransfer(address sender, uint256 amount, bytes calldata data) external {}
 
-    function fulfill(address _client) external returns (FunctionsResponse.FulfillResult, uint96) {}
+    function fulfill() external {
+        // fulfillRequest(bytes32 requestId, bytes memory response, bytes memory err)
+        FunctionsClient(client).handleOracleFulfillment(bytes32(requestId), bytes("3"), bytes(""));
+        // WeatherNft(client).fulfillRequest(bytes32(requestId), bytes("3"), bytes(""));
+    }
 }
 
 // function _sendRequest(
