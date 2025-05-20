@@ -21,6 +21,8 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
     using FunctionsRequest for FunctionsRequest.Request;
     using SafeERC20 for IERC20;
 
+    mapping(address => uint256) addressToLinkDeposit;
+
     // constructor
     constructor(
         Weather[] memory weathers,
@@ -50,6 +52,16 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         s_tokenCounter = 1;
     }
 
+    fucntion withdrawLinks(_tokenId) external {
+        address owner = _ownerOf(_tokenId);
+        if (owner != msg.sender) {
+            revert WeatherNft__Unauthorized()
+        } else {
+            LinkTokenInterface(s_link).approve(owner, addressToLinkDeposit[owner]);
+            IERC20(s_link).safeTransferFrom(address(this), address(this), addressToLinkDeposit[owner]);
+        }
+    }
+
     // functions
     function updateFunctionsGasLimit(uint32 newGaslimit) external onlyOwner {
         s_functionsConfig.gasLimit = newGaslimit;
@@ -66,7 +78,6 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
     function updateEncryptedSecretsURL(bytes memory newEncryptedSecretsURL) external onlyOwner {
         s_functionsConfig.encryptedSecretsURL = newEncryptedSecretsURL;
     }
-    // @? this can be changed for DoS
 
     function updateKeeperGaslimit(uint32 newGaslimit) external onlyOwner {
         s_upkeepGaslimit = newGaslimit;
@@ -87,24 +98,22 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         _reqId =
             _sendRequest(req.encodeCBOR(), s_functionsConfig.subId, s_functionsConfig.gasLimit, s_functionsConfig.donId);
     }
-    // @? on error in fulfillMintRequest the link be stuck
 
     function requestMintWeatherNFT( // check
-        string memory _pincode,
-        string memory _isoCode,
-        bool _registerKeeper,
-        uint256 _heartbeat,
-        // @? - What happens if init link deposit is too low or 0
-        uint256 _initLinkDeposit
-    ) external payable returns (bytes32 _reqId) {
+    string memory _pincode, string memory _isoCode, bool _registerKeeper, uint256 _heartbeat, uint256 _initLinkDeposit)
+        external
+        payable
+        returns (bytes32 _reqId)
+    {
         // @? - multicall exploit
         require(msg.value == s_currentMintPrice, WeatherNft__InvalidAmountSent());
         s_currentMintPrice += s_stepIncreasePerMint;
 
         if (_registerKeeper) {
+            addressToLinkDeposit[msg.sender] = _initLinkDeposit;
             IERC20(s_link).safeTransferFrom(msg.sender, address(this), _initLinkDeposit);
         }
-
+        
         _reqId = _sendFunctionsWeatherFetchRequest(_pincode, _isoCode);
 
         emit WeatherNFTMintRequestSent(msg.sender, _pincode, _isoCode, _reqId);
