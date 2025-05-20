@@ -59,16 +59,7 @@ Mint price increases with each mint
 
 # Auxiliary Notes
 
-// @? - this is relevant
-```text
-@ethersproject/providers  <=5.7.2
-Depends on vulnerable versions of ws
-node_modules/eth-crypto/node_modules/@ethersproject/providers
-node_modules/zksync-ethers/node_modules/@ethersproject/providers
-@trufflesuite/uws-js-unofficial  *
-Depends on vulnerable versions of ws
-node_modules/ganache/node_modules/@trufflesuite/uws-js-unofficial
-```
+
 MINTING:
 
 WeatherNft::requestMintWeatherNFT

@@ -62,7 +62,6 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
     function updateSource(string memory newSource) external onlyOwner {
         s_functionsConfig.source = newSource;
     }
-    // @? - is really secret onchain
 
     function updateEncryptedSecretsURL(bytes memory newEncryptedSecretsURL) external onlyOwner {
         s_functionsConfig.encryptedSecretsURL = newEncryptedSecretsURL;
@@ -88,12 +87,12 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         _reqId =
             _sendRequest(req.encodeCBOR(), s_functionsConfig.subId, s_functionsConfig.gasLimit, s_functionsConfig.donId);
     }
+    // @? on error in fulfillMintRequest the link be stuck
 
     function requestMintWeatherNFT( // check
         string memory _pincode,
         string memory _isoCode,
         bool _registerKeeper,
-        // @? - what hapeens if _heartbeat is too low or 0
         uint256 _heartbeat,
         // @? - What happens if init link deposit is too low or 0
         uint256 _initLinkDeposit

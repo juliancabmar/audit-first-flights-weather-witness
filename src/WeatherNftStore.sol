@@ -57,11 +57,15 @@ contract WeatherNftStore {
     mapping(bytes32 => MintFunctionReqResponse) public s_funcReqIdToMintFunctionReqResponse;
     mapping(bytes32 => uint256) public s_funcReqIdToTokenIdUpdate;
     uint256 public s_currentMintPrice;
+    // @? - can be immutable
     uint256 public s_stepIncreasePerMint;
     mapping(uint256 => Weather) public s_tokenIdToWeather;
     mapping(uint256 => WeatherNftInfo) public s_weatherNftInfo;
+    // @? - can be immutable
     address public s_link;
+    // @? - initialized but never used
     address public s_keeperRegistry;
+    // @? - can be immutable
     address public s_keeperRegistrar;
     uint32 public s_upkeepGaslimit;
 

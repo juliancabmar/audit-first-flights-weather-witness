@@ -25,7 +25,6 @@ const weather_id_x = parseInt(weather_id / 100);
 
 let weather_enum = 0;
 
-
 // ref: https://openweathermap.org/weather-conditions
 // thunderstorm
 if (weather_id_x === 2) weather_enum = 3;
