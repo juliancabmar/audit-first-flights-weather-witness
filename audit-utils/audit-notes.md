@@ -69,3 +69,23 @@ node_modules/zksync-ethers/node_modules/@ethersproject/providers
 Depends on vulnerable versions of ws
 node_modules/ganache/node_modules/@trufflesuite/uws-js-unofficial
 ```
+MINTING:
+
+WeatherNft::requestMintWeatherNFT
+    WeatherNft::_sendFunctionsWeatherFetchRequest
+        FunctionsClient::_sendRequest
+            
+FunctionsClient::handleOracleFulfillment
+    WeatherNft::fulfillRequest
+
+WeatherNft::fulfillMintRequest
+
+-----------------------------------------
+UPDATING:
+
+WeatherNft::performUpkeep
+    WeatherNft::_sendFunctionsWeatherFetchRequest
+        FunctionsClient::_sendRequest
+
+FunctionsClient::handleOracleFulfillment
+    WeatherNft::fulfillRequest

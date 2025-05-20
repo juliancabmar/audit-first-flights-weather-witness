@@ -89,13 +89,16 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
             _sendRequest(req.encodeCBOR(), s_functionsConfig.subId, s_functionsConfig.gasLimit, s_functionsConfig.donId);
     }
 
-    function requestMintWeatherNFT(
+    function requestMintWeatherNFT( // check
         string memory _pincode,
         string memory _isoCode,
         bool _registerKeeper,
+        // @? - what hapeens if _heartbeat is too low or 0
         uint256 _heartbeat,
+        // @? - What happens if init link deposit is too low or 0
         uint256 _initLinkDeposit
     ) external payable returns (bytes32 _reqId) {
+        // @? - multicall exploit
         require(msg.value == s_currentMintPrice, WeatherNft__InvalidAmountSent());
         s_currentMintPrice += s_stepIncreasePerMint;
 
@@ -111,26 +114,32 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
             user: msg.sender,
             pincode: _pincode,
             isoCode: _isoCode,
+            // e - using a keeper or not
             registerKeeper: _registerKeeper,
             heartbeat: _heartbeat,
             initLinkDeposit: _initLinkDeposit
         });
     }
+    // @? - the requestId can be used two or more times
+    // @? - fulfillMintRequest can will be called here
 
     function fulfillRequest(bytes32 requestId, bytes memory response, bytes memory err) internal override {
+        // e - if req id exist
         if (s_funcReqIdToUserMintReq[requestId].user != address(0)) {
             s_funcReqIdToMintFunctionReqResponse[requestId] = MintFunctionReqResponse({response: response, err: err});
         } else if (s_funcReqIdToTokenIdUpdate[requestId] > 0) {
             _fulfillWeatherUpdate(requestId, response, err);
         }
     }
+    // @? - this can be front run
 
     function fulfillMintRequest(bytes32 requestId) external {
+        // check
         bytes memory response = s_funcReqIdToMintFunctionReqResponse[requestId].response;
         bytes memory err = s_funcReqIdToMintFunctionReqResponse[requestId].err;
 
         require(response.length > 0 || err.length > 0, WeatherNft__Unauthorized());
-
+        // @? - returns without a error reason
         if (response.length == 0 || err.length > 0) {
             return;
         }
@@ -176,6 +185,7 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
     }
 
     function _fulfillWeatherUpdate(bytes32 requestId, bytes memory response, bytes memory err) internal {
+        // @? - returns without a error reason
         if (response.length == 0 || err.length > 0) {
             return;
         }
@@ -187,6 +197,7 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
 
         emit NftWeatherUpdated(tokenId, Weather(weather));
     }
+    // @? - can be front running
 
     function checkUpkeep(bytes calldata checkData)
         external
@@ -200,11 +211,14 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
         } else {
             upkeepNeeded =
                 (block.timestamp >= s_weatherNftInfo[_tokenId].lastFulfilledAt + s_weatherNftInfo[_tokenId].heartbeat);
+            // @? - if upkeepNeeded === false performData never returned sooo... error in function
             if (upkeepNeeded) {
                 performData = checkData;
             }
         }
     }
+    // @? - User can call performUpkeep manually whitout set registerKeeper to true
+    // @? - anyone who have the tokenId can update the weather
 
     function performUpkeep(bytes calldata performData) external override {
         uint256 _tokenId = abi.decode(performData, (uint256));
