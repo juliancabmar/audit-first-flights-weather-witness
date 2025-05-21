@@ -593,7 +593,7 @@ Give a inaccurate weather info.
 **Recommended Mitigation:**\
 Add enum member [6] as the new drizzle condition:
 
-<details><summary>Fix</summary>
+<details><summary>Example</summary>
 
 On `DeployWeatherNft.js`
 ```diff
@@ -625,6 +625,31 @@ On `WeatherNftStore.sol`
         SNOW,
 +       DRIZZLE
     }
+```
+On `GetWeather.js`
+```diff
+    .
+    .
+    let weather_enum = 0;
+
+    // ref: https://openweathermap.org/weather-conditions
+    // thunderstorm
+    if (weather_id_x === 2) weather_enum = 3;
+    // rain
+-   else if (weather_id_x === 3 || weather_id_x === 5) weather_enum = 2;
++   else if (weather_id_x === 3) weather_enum = 2;
++   // drizzle
++   else if (weather_id_x === 5) weather_enum = 6;
+    // snow
+    else if (weather_id_x === 6) weather_enum = 5;
+    // clear
+    else if (weather_id === 800) weather_enum = 0;
+    // cloudy
+    else if (weather_id_x === 8) weather_enum = 1;
+    // windy
+    else weather_enum = 4;
+
+    return Functions.encodeUint256(weather_enum);
 ```
 </details>
 
