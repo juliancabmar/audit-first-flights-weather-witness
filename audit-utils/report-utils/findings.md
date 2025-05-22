@@ -1,3 +1,75 @@
+### [S-#] Contract `WeatherNft` has payable functions, but not have a withdraw mechanism
+
+**Description:**\
+The `WeatherNft` contract include the `requestMintWeatherNFT()` payable function but lacks a mechanism for withdrawing collected funds, leaving them locked in the contract.
+
+**Impact:**\
+Funds collected through payable functions cannot be accessed, leading a financial to the contract owner.
+
+```solidity
+    function requestMintWeatherNFT(string memory _pincode, string memory _isoCode, bool _registerKeeper, uint256 _heartbeat, uint256 _initLinkDeposit)
+        external
+@>      payable
+        returns (bytes32 _reqId)
+    {
+        require(msg.value == s_currentMintPrice, WeatherNft__InvalidAmountSent());
+        s_currentMintPrice += s_stepIncreasePerMint;
+
+        if (_registerKeeper) {
+            addressToLinkDeposit[msg.sender] = _initLinkDeposit;
+            IERC20(s_link).safeTransferFrom(msg.sender, address(this), _initLinkDeposit);
+        }
+
+        _reqId = _sendFunctionsWeatherFetchRequest(_pincode, _isoCode);
+
+        emit WeatherNFTMintRequestSent(msg.sender, _pincode, _isoCode, _reqId);
+
+        s_funcReqIdToUserMintReq[_reqId] = UserMintRequest({
+            user: msg.sender,
+            pincode: _pincode,
+            isoCode: _isoCode,
+            // e - using a keeper or not
+            registerKeeper: _registerKeeper,
+            heartbeat: _heartbeat,
+            initLinkDeposit: _initLinkDeposit
+        });
+    }
+```
+
+**Recommended Mitigation:**\
+Add a `onlyOwner` withdraw function:
+
+```diff
+    .
+    .
+    // functions
++   function withdraw() external onlyOwner {
++       uint256 balance = address(this).balance;
++       require(balance > 0, "No ETH to withdraw");
++       (bool success, ) = msg.sender.call{value: balance}("");
++       require(success, "Withdraw failed");
++   }   
+
+    function updateFunctionsGasLimit(uint32 newGaslimit) external onlyOwner {
+        s_functionsConfig.gasLimit = newGaslimit;
+    }
+
+    function updateSubId(uint64 newSubId) external onlyOwner {
+        s_functionsConfig.subId = newSubId;
+    }
+
+    function updateSource(string memory newSource) external onlyOwner {
+        s_functionsConfig.source = newSource;
+    }
+
+    function updateEncryptedSecretsURL(bytes memory newEncryptedSecretsURL) external onlyOwner {
+        s_functionsConfig.encryptedSecretsURL = newEncryptedSecretsURL;
+    }
+    .
+    .
+```
+
+
 
 ### [S-#] `WeatherNft::performUpkeep` can be called by anyone with any parameter
 **Description:**\
