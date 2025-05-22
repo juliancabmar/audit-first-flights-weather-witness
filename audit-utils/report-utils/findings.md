@@ -151,6 +151,30 @@ function testCanBeCalledByAnyoneWithAnithing() public {
 **Recommended Mitigation:**\
 Allow only the Weather Nft Owner and the related Keeper to call `performUpkeep`
 
+Example:
+
+```solidity
+function performUpkeep(bytes calldata performData) external override {
++   require(msg.sender == s_keeperRegistry, "Unauthorized caller");
+    uint256 _tokenId = abi.decode(performData, (uint256));
++   if (_ownerOf(_tokenId) != msg.sender) {
++       revert WeatherNft__Unauthorized();
++   }
+    uint256 upkeepId = s_weatherNftInfo[_tokenId].upkeepId;
+
+    s_weatherNftInfo[_tokenId].lastFulfilledAt = block.timestamp;
+
+    // make functions request
+    string memory pincode = s_weatherNftInfo[_tokenId].pincode;
+    string memory isoCode = s_weatherNftInfo[_tokenId].isoCode;
+
+    bytes32 _reqId = _sendFunctionsWeatherFetchRequest(pincode, isoCode);
+    s_funcReqIdToTokenIdUpdate[_reqId] = _tokenId;
+
+    emit NftWeatherUpdateRequestSend(_tokenId, _reqId, upkeepId);
+}
+```
+
 ### [S-#] Functions `WeatherNft::fulfillMintRequest` and `WeatherNft::_fulfillWeatherUpdate` empty return after Chainlink Function response check.
 
 **Description:**\

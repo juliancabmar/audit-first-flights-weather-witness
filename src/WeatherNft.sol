@@ -63,6 +63,13 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
     }
 
     // functions
+    function withdraw() external onlyOwner {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No ETH to withdraw");
+        (bool success,) = msg.sender.call{value: balance}("");
+        require(success, "Withdraw failed");
+    }
+
     function updateFunctionsGasLimit(uint32 newGaslimit) external onlyOwner {
         s_functionsConfig.gasLimit = newGaslimit;
     }
@@ -218,7 +225,11 @@ contract WeatherNft is WeatherNftStore, ERC721, FunctionsClient, ConfirmedOwner,
     }
 
     function performUpkeep(bytes calldata performData) external override {
+        require(msg.sender == s_keeperRegistry, "Unauthorized caller");
         uint256 _tokenId = abi.decode(performData, (uint256));
+        if (_ownerOf(_tokenId) != msg.sender) {
+            revert WeatherNft__Unauthorized();
+        }
         uint256 upkeepId = s_weatherNftInfo[_tokenId].upkeepId;
 
         s_weatherNftInfo[_tokenId].lastFulfilledAt = block.timestamp;
